@@ -3,6 +3,13 @@ const connectBtn = document.getElementById('connect-btn');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 
+// Marker Editor Elements
+const markerEditor = document.getElementById('marker-editor');
+const markerEditorInput = document.getElementById('marker-editor-input');
+const markerEditorSave = document.getElementById('marker-editor-save');
+const markerEditorCancel = document.getElementById('marker-editor-cancel');
+const markerEditorDelete = document.getElementById('marker-editor-delete');
+
 // Web Serial Variables
 let port = null;
 let reader = null;
@@ -11,14 +18,18 @@ let keepReading = false;
 // Statistics & History
 let vMax = 0, vMin = 99.0;
 let iMax = 0, iMin = 99.0;
-let historyV = [];
-let historyI = [];
-let isDrawing = false; // Prevent multiple animation frames
 
 // CSV Logging
 const csvBtn = document.getElementById('csv-btn');
-let csvData = ["Time(s),Voltage(V),Current(A),Power(W)"];
+const csvInput = document.getElementById('csv-input');
+const loadCsvBtn = document.getElementById('load-csv-btn');
+let csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
 let startTimeMs = 0;
+
+// Markers
+let markers = [];
+let editingMarker = null; // Reference to the marker currently being edited
+let newMarkerTime = null; // Time for a newly placed marker that hasn't been saved yet
 
 // uPlot Setup
 let uplotChart;
@@ -34,8 +45,8 @@ let currentWindow = 10; // Default 10 seconds wide
 
 // uPlot Wheel Zoom Plugin
 function wheelZoomPlugin() {
-    let factor = 0.75;
-    let xMin, xMax, yMin, yMax, xRange, yRange;
+    const factor = 0.75;
+    let xMin, xMax;
 
     function clamp(nRange, nMin, nMax, fRange, fMin, fMax) {
         if (nRange > fRange) {
@@ -56,8 +67,6 @@ function wheelZoomPlugin() {
             ready: u => {
                 xMin = u.scales.x.min;
                 xMax = u.scales.x.max;
-                yMin = u.scales.y_v.min;
-                yMax = u.scales.y_v.max; // Using y_v as reference if needed
 
                 let over = u.over;
                 let rect = over.getBoundingClientRect();
@@ -204,12 +213,236 @@ function tooltipPlugin() {
     };
 }
 
+// Click Handler for Marker Toggling
+function markerClickPlugin() {
+    return {
+        hooks: {
+            ready: u => {
+                u.over.addEventListener("mouseup", e => {
+                    // Only left click
+                    if (e.button !== 0) return;
+
+                    // Prevent if we just finished panning
+                    if (e.target.closest('#uplot-chart.interacting')) return;
+
+                    let rect = u.over.getBoundingClientRect();
+                    let left = e.clientX - rect.left;
+                    let top = e.clientY - rect.top;
+
+                    // Convert pixel position to data time
+                    let timeVal = u.posToVal(left, 'x');
+
+                    if (timeVal == null || isNaN(timeVal)) return;
+
+                    // Check if we clicked near an existing marker
+                    // Define a tolerance in pixels (e.g., 10px) converted to time
+                    let pxTolerance = 10;
+                    let timeTolerance = u.posToVal(left + pxTolerance, 'x') - timeVal;
+
+                    let foundMarker = null;
+                    for (let m of markers) {
+                        if (Math.abs(m.time - timeVal) <= timeTolerance) {
+                            foundMarker = m;
+                            break;
+                        }
+                    }
+
+                    // Position the editor popup near the click
+                    markerEditor.style.left = (e.clientX + 10) + 'px';
+                    markerEditor.style.top = (e.clientY + 10) + 'px';
+                    markerEditor.classList.remove('hidden');
+
+                    if (foundMarker) {
+                        // Edit existing
+                        editingMarker = foundMarker;
+                        newMarkerTime = null;
+                        markerEditorInput.value = foundMarker.label;
+                        markerEditorDelete.style.display = 'inline-block';
+                    } else {
+                        // Create new
+                        editingMarker = null;
+                        newMarkerTime = timeVal;
+                        markerEditorInput.value = '';
+                        markerEditorDelete.style.display = 'none';
+                    }
+
+                    markerEditorInput.focus();
+                });
+            }
+        }
+    };
+}
+
+// Marker canvas draw colors
+const MARKER_COLOR = 'rgba(0, 255, 255, 0.9)';
+const MARKER_LINE_COLOR = 'rgba(0, 255, 255, 0.5)';
+const MARKER_LABEL_BG = 'rgba(0, 0, 0, 0.7)';
+
+// uPlot Drawing Hook for Markers
+function drawMarkersHook() {
+    return {
+        hooks: {
+            draw: u => {
+                let ctx = u.ctx;
+                let { left, top, width, height } = u.bbox;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(left, top, width, height);
+                ctx.clip();
+
+                ctx.fillStyle = MARKER_COLOR;
+                ctx.strokeStyle = MARKER_LINE_COLOR;
+                ctx.lineWidth = 1;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "bottom";
+                ctx.font = "10px sans-serif";
+
+                for (let i = 0; i < markers.length; i++) {
+                    let m = markers[i];
+
+                    // Only draw if within current view
+                    if (m.time >= u.scales.x.min && m.time <= u.scales.x.max) {
+                        let cx = Math.round(u.valToPos(m.time, 'x', true));
+
+                        // Draw vertical line
+                        ctx.beginPath();
+                        ctx.moveTo(cx, top);
+                        ctx.lineTo(cx, top + height);
+                        ctx.stroke();
+
+                        // Draw label background
+                        let textWidth = ctx.measureText(m.label).width;
+                        ctx.fillStyle = MARKER_LABEL_BG;
+                        ctx.fillRect(cx - textWidth / 2 - 2, top, textWidth + 4, 14);
+
+                        // Draw Text
+                        ctx.fillStyle = MARKER_COLOR;
+                        ctx.fillText(m.label, cx, top + 13);
+                    }
+                }
+
+                ctx.restore();
+            }
+        }
+    };
+}
+
+
+function hideMarkerEditor() {
+    markerEditor.classList.add('hidden');
+    editingMarker = null;
+    newMarkerTime = null;
+}
+
+markerEditorSave.addEventListener('click', () => {
+    let text = markerEditorInput.value.trim();
+    if (!text) {
+        hideMarkerEditor();
+        return;
+    }
+
+    if (editingMarker) {
+        // Update existing marker
+        let oldText = editingMarker.label;
+        editingMarker.label = text;
+
+        // Also update in CSV data if it exists
+        // Find the closest point in data and its index
+        let dataIdx = -1;
+        let minDiff = Infinity;
+        for (let i = 0; i < data[0].length; i++) {
+            let diff = Math.abs(data[0][i] - editingMarker.time);
+            if (diff < minDiff) { minDiff = diff; dataIdx = i; }
+        }
+
+        // CSV offset is dataIdx + 1 (header row)
+        if (dataIdx >= 0 && dataIdx + 1 < csvData.length) {
+            let targetRow = csvData[dataIdx + 1];
+            // Very naive replacement for the exact text (might be better to re-split and join)
+            // For a robust implementation, assume the marker is at the end or split by comma/pipe
+            csvData[dataIdx + 1] = targetRow.replace(oldText, text);
+        }
+    } else if (newMarkerTime !== null) {
+        // Create new marker
+        markers.push({ time: newMarkerTime, label: text });
+
+        // Add to CSV
+        let dataIdx = -1;
+        let minDiff = Infinity;
+        for (let i = 0; i < data[0].length; i++) {
+            let diff = Math.abs(data[0][i] - newMarkerTime);
+            if (diff < minDiff) { minDiff = diff; dataIdx = i; }
+        }
+
+        if (dataIdx >= 0 && dataIdx + 1 < csvData.length) {
+            let targetRow = csvData[dataIdx + 1];
+            let parts = targetRow.split(',');
+            if (parts.length === 4) {
+                csvData[dataIdx + 1] = targetRow + `,${text}`;
+            } else if (parts.length > 4) {
+                csvData[dataIdx + 1] = targetRow + `|${text}`;
+            }
+        }
+    }
+
+    hideMarkerEditor();
+    if (uplotChart) uplotChart.redraw();
+});
+
+markerEditorDelete.addEventListener('click', () => {
+    if (editingMarker) {
+        // Remove from array
+        markers = markers.filter(m => m !== editingMarker);
+
+        // Remove from CSV
+        let dataIdx = -1;
+        let minDiff = Infinity;
+        for (let i = 0; i < data[0].length; i++) {
+            let diff = Math.abs(data[0][i] - editingMarker.time);
+            if (diff < minDiff) { minDiff = diff; dataIdx = i; }
+        }
+
+        if (dataIdx >= 0 && dataIdx + 1 < csvData.length) {
+            let targetRow = csvData[dataIdx + 1];
+            // If it ends with `,Label`, we might strip it, but it gets complex with pipes.
+            // Simple version: replace explicitly
+            let newRow = targetRow.replace(`,${editingMarker.label}`, '').replace(`|${editingMarker.label}`, '');
+            csvData[dataIdx + 1] = newRow;
+        }
+    }
+    hideMarkerEditor();
+    if (uplotChart) uplotChart.redraw();
+});
+
+markerEditorCancel.addEventListener('click', hideMarkerEditor);
+
+// Close marker editor if pressing Escape, or Enter to save
+markerEditorInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        markerEditorSave.click();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hideMarkerEditor();
+    }
+});
+
+// Close when clicking outside marker editor
+document.addEventListener('mousedown', (e) => {
+    if (!markerEditor.classList.contains('hidden') && !markerEditor.contains(e.target) && !e.target.closest('.u-over')) {
+        hideMarkerEditor();
+    }
+});
+
+// ----------------------------------------------------
+
 function initPlot() {
     const opts = {
         title: "Live Monitoring",
         width: document.getElementById('uplot-chart').clientWidth,
         height: document.getElementById('uplot-chart').clientHeight,
-        plugins: [wheelZoomPlugin(), tooltipPlugin()],
+        plugins: [wheelZoomPlugin(), tooltipPlugin(), drawMarkersHook(), markerClickPlugin()],
         cursor: {
             sync: { key: "foo" },
             drag: { x: false, y: false } // disable default drag to select zoom
@@ -283,6 +516,7 @@ demoBtn.addEventListener('click', () => {
     let t = 0;
     vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
     data = [[], [], []];
+    markers = [];
 
     let baseV = 5.08;
     let baseI = 0.02;
@@ -344,6 +578,112 @@ demoBtn.addEventListener('click', () => {
     }
 });
 
+// CSV Load Functionality
+loadCsvBtn.addEventListener('click', () => {
+    csvInput.click();
+});
+
+csvInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const text = event.target.result;
+        const lines = text.split('\n');
+
+        if (lines.length < 2) return; // Needs header + at least 1 data row
+
+        // Reset state
+        data = [[], [], []];
+        markers = [];
+        csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
+        vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
+
+        // Skip header line (index 0)
+        for (let i = 1; i < lines.length; i++) {
+            let line = lines[i].trim();
+            if (!line) continue;
+
+            let parts = [];
+            let currentLine = line;
+
+            // Extract the first 4 columns (t, v, curr, power)
+            for (let c = 0; c < 4; c++) {
+                let commaIdx = currentLine.indexOf(',');
+                if (commaIdx !== -1) {
+                    parts.push(currentLine.substring(0, commaIdx));
+                    currentLine = currentLine.substring(commaIdx + 1);
+                } else {
+                    parts.push(currentLine);
+                    currentLine = "";
+                    break;
+                }
+            }
+
+            // Anything left is the marker text
+            if (currentLine.length > 0) {
+                parts.push(currentLine);
+            }
+
+            if (parts.length >= 4) {
+                let t = parseFloat(parts[0]);
+                let v = parseFloat(parts[1]);
+                let curr = parseFloat(parts[2]);
+
+                if (isNaN(t) || isNaN(v) || isNaN(curr)) continue;
+
+                data[0].push(t);
+                data[1].push(v);
+                data[2].push(curr);
+                csvData.push(line); // Preserve exact line for exporting again
+
+                // Parse markers if present
+                if (parts.length >= 5 && parts[4]) {
+                    let markerText = parts[4].replace(/^\|/, ''); // Support pipe fallback if used
+                    if (markerText) {
+                        markers.push({ time: t, label: markerText });
+                    }
+                }
+
+                // Update stats
+                if (v > vMax) vMax = v;
+                if (v < vMin) vMin = v;
+                if (curr > iMax) iMax = curr;
+                if (curr < iMin) iMin = curr;
+            }
+        }
+
+        // Update UI
+        document.getElementById('v-max').innerText = vMax.toFixed(3);
+        document.getElementById('v-min').innerText = vMin.toFixed(3);
+        document.getElementById('i-max').innerText = iMax.toFixed(3);
+        document.getElementById('i-min').innerText = iMin.toFixed(3);
+
+        if (data[0].length > 0) {
+            let lastV = data[1][data[1].length - 1];
+            let lastI = data[2][data[2].length - 1];
+            document.getElementById('val-v').innerText = lastV.toFixed(3);
+            document.getElementById('val-i').innerText = lastI.toFixed(3);
+            document.getElementById('val-p').innerText = (lastV * lastI).toFixed(3);
+
+            if (uplotChart) {
+                uplotChart.setScale('x', { min: data[0][0], max: data[0][data[0].length - 1] });
+                isAutoScrolling = false;
+                uplotChart.setData(data, false);
+            }
+        }
+
+        // Enable CSV button just in case
+        csvBtn.disabled = false;
+        csvBtn.innerText = `Download CSV (${csvData.length - 1})`;
+
+        // Reset input so the same file can be reloaded if needed
+        csvInput.value = '';
+    };
+    reader.readAsText(file);
+});
+
 connectBtn.addEventListener('click', async () => {
     if (port) {
         await disconnect();
@@ -366,8 +706,9 @@ async function connect() {
         // Reset stats
         vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
         data = [[], [], []];
+        markers = [];
         if (uplotChart) uplotChart.setData(data);
-        csvData = ["Time(s),Voltage(V),Current(A),Power(W)"];
+        csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
         startTimeMs = Date.now();
         csvBtn.disabled = false;
         csvBtn.textContent = `Download CSV (0)`;

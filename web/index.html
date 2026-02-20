@@ -25,6 +25,8 @@
             </div>
             <div class="header-controls">
                 <button id="demo-btn" class="btn btn-secondary">Load Demo</button>
+                <input type="file" id="csv-input" accept=".csv" style="display: none;">
+                <button id="load-csv-btn" class="btn btn-secondary">Load CSV</button>
                 <button id="csv-btn" class="btn btn-secondary" disabled>Download CSV (0)</button>
                 <button id="connect-btn" class="btn btn-primary">Connect Device</button>
             </div>
@@ -73,6 +75,16 @@
             <div class="graph-container" id="uplot-chart">
             </div>
         </section>
+
+        <!-- Marker Editor Popup -->
+        <div id="marker-editor" class="marker-editor hidden">
+            <input type="text" id="marker-editor-input" placeholder="Comment here...">
+            <div class="marker-editor-controls">
+                <button id="marker-editor-save" class="btn btn-primary btn-sm">Save</button>
+                <button id="marker-editor-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+                <button id="marker-editor-delete" class="btn btn-danger btn-sm">Delete</button>
+            </div>
+        </div>
     </div>
 
     <script src="lib/uplot/uPlot.iife.min.js"></script>

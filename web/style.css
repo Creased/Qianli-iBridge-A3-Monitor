@@ -1,16 +1,48 @@
 :root {
+    /* Backgrounds */
     --bg-dark: #0a0a0c;
-    --panel-bg: rgba(20, 20, 25, 0.7);
-    --panel-border: rgba(255, 255, 255, 0.1);
+    --bg-panel: rgba(20, 20, 25, 0.7);
+    --bg-elevated: #1e1e24;
+    --bg-input: #202028;
+    --bg-tooltip: rgba(16, 20, 24, 0.9);
 
+    /* Borders */
+    --border-subtle: rgba(255, 255, 255, 0.1);
+    --border-medium: rgba(255, 255, 255, 0.2);
+
+    /* Signal Colors */
     --color-voltage: #00ff55;
     --color-voltage-glow: rgba(0, 255, 85, 0.2);
+    --color-voltage-border: rgba(0, 255, 85, 0.3);
+    --color-voltage-bg: rgba(0, 255, 85, 0.05);
+
     --color-current: #ffcc00;
     --color-current-glow: rgba(255, 204, 0, 0.2);
-    --color-power: #a0a0b0;
+    --color-current-border: rgba(255, 204, 0, 0.3);
+    --color-current-bg: rgba(255, 204, 0, 0.05);
 
+    --color-power: #a0a0b0;
+    --color-power-border: rgba(160, 160, 176, 0.3);
+
+    /* Danger */
+    --color-danger: #ff5555;
+    --color-danger-bg: rgba(255, 50, 50, 0.1);
+    --color-danger-bg-hover: rgba(255, 50, 50, 0.2);
+    --color-danger-border: rgba(255, 50, 50, 0.3);
+
+    /* Text */
     --text-main: #ffffff;
     --text-muted: #888899;
+
+    /* Misc */
+    --color-dot-disconnected: #555555;
+    --shadow-md: rgba(0, 0, 0, 0.5);
+    --shadow-heavy: rgba(0, 0, 0, 0.8);
+
+    /* Button surfaces */
+    --btn-bg: rgba(255, 255, 255, 0.1);
+    --btn-bg-hover: rgba(255, 255, 255, 0.2);
+    --btn-border: rgba(255, 255, 255, 0.2);
 }
 
 * {
@@ -25,7 +57,6 @@ body {
     font-family: 'Inter', sans-serif;
     height: 100vh;
     overflow: hidden;
-    /* Prevent scrolling */
     display: flex;
     flex-direction: column;
 }
@@ -38,8 +69,8 @@ body::before {
     left: 0;
     right: 0;
     bottom: 0;
-    background: radial-gradient(circle at 15% 50%, rgba(0, 255, 85, 0.05), transparent 40%),
-        radial-gradient(circle at 85% 30%, rgba(255, 204, 0, 0.05), transparent 40%);
+    background: radial-gradient(circle at 15% 50%, var(--color-voltage-bg), transparent 40%),
+        radial-gradient(circle at 85% 30%, var(--color-current-bg), transparent 40%);
     z-index: -1;
 }
 
@@ -56,8 +87,8 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 16px 24px;
     backdrop-filter: blur(10px);
@@ -85,7 +116,7 @@ header {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background-color: #555;
+    background-color: var(--color-dot-disconnected);
 }
 
 .dot.connected {
@@ -95,9 +126,9 @@ header {
 
 /* Button */
 .btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-border);
+    color: var(--text-main);
     padding: 10px 20px;
     border-radius: 8px;
     font-family: inherit;
@@ -107,12 +138,31 @@ header {
 }
 
 .btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--btn-bg-hover);
     transform: translateY(-1px);
 }
 
-.btn.primary {
-    background: #202028;
+.btn-primary {
+    background: var(--bg-input);
+}
+
+.btn-secondary {
+    background: var(--btn-bg);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.btn-danger {
+    background: var(--color-danger-bg);
+    border-color: var(--color-danger-border);
+    color: var(--color-danger);
+}
+
+.btn-danger:hover {
+    background: var(--color-danger-bg-hover);
 }
 
 /* Dashboard Grid */
@@ -123,8 +173,8 @@ header {
 }
 
 .panel {
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
     border-radius: 16px;
     padding: 24px;
     backdrop-filter: blur(10px);
@@ -133,17 +183,16 @@ header {
     justify-content: space-between;
 }
 
-/* Flat design */
 .voltage-panel {
-    border-color: rgba(0, 255, 85, 0.3);
+    border-color: var(--color-voltage-border);
 }
 
 .current-panel {
-    border-color: rgba(255, 204, 0, 0.3);
+    border-color: var(--color-current-border);
 }
 
 .power-panel {
-    border-color: rgba(160, 160, 176, 0.3);
+    border-color: var(--color-power-border);
 }
 
 .panel-header {
@@ -216,14 +265,13 @@ header {
     flex-direction: column;
     gap: 12px;
     min-height: 0;
-    /* Prevents flex children from overflowing the parent */
 }
 
 .graph-controls {
     display: flex;
     gap: 20px;
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
     border-radius: 8px;
     padding: 10px 16px;
     font-size: 0.9rem;
@@ -240,20 +288,63 @@ header {
 }
 
 .control-group select {
-    background: #202028;
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: var(--bg-input);
+    color: var(--text-main);
+    border: 1px solid var(--border-medium);
     border-radius: 4px;
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-family: inherit;
     outline: none;
 }
 
+/* Marker Editor Popup */
+.marker-editor {
+    position: absolute;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 8px 24px var(--shadow-heavy);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 1000;
+    transition: opacity 0.1s ease, transform 0.1s ease;
+    transform: translateY(0);
+}
+
+.marker-editor.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-5px);
+}
+
+.marker-editor input {
+    background: var(--bg-dark);
+    color: var(--text-main);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    min-width: 200px;
+}
+
+.marker-editor input:focus {
+    border-color: var(--color-voltage);
+}
+
+.marker-editor-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
 .graph-container {
     flex: 1;
-    /* Takes remaining height */
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     position: relative;
     overflow: hidden;
@@ -280,15 +371,15 @@ header {
 .u-tooltip {
     position: absolute;
     display: none;
-    background: rgba(16, 20, 24, 0.9);
-    border: 1px solid var(--panel-border);
+    background: var(--bg-tooltip);
+    border: 1px solid var(--border-subtle);
     border-radius: 4px;
     padding: 8px 12px;
     font-size: 14px;
     color: var(--text-main);
     pointer-events: none;
     z-index: 100;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 4px 12px var(--shadow-md);
     backdrop-filter: blur(4px);
     transition: opacity 0.1s ease-out;
 }
@@ -304,12 +395,12 @@ header {
 }
 
 .u-tooltip-val-v {
-    color: #00ff55;
+    color: var(--color-voltage);
     font-weight: bold;
 }
 
 .u-tooltip-val-i {
-    color: #ffcc00;
+    color: var(--color-current);
     font-weight: bold;
 }
 
@@ -317,7 +408,7 @@ header {
     color: var(--text-muted);
     font-size: 12px;
     margin-bottom: 4px;
-    border-bottom: 1px solid var(--panel-border);
+    border-bottom: 1px solid var(--border-subtle);
     padding-bottom: 4px;
 }
 
