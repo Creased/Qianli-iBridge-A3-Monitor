@@ -1,0 +1,328 @@
+:root {
+    --bg-dark: #0a0a0c;
+    --panel-bg: rgba(20, 20, 25, 0.7);
+    --panel-border: rgba(255, 255, 255, 0.1);
+
+    --color-voltage: #00ff55;
+    --color-voltage-glow: rgba(0, 255, 85, 0.2);
+    --color-current: #ffcc00;
+    --color-current-glow: rgba(255, 204, 0, 0.2);
+    --color-power: #a0a0b0;
+
+    --text-main: #ffffff;
+    --text-muted: #888899;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    /* Prevent scrolling */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Background Effect (Subtle mesh gradient) */
+body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 15% 50%, rgba(0, 255, 85, 0.05), transparent 40%),
+        radial-gradient(circle at 85% 30%, rgba(255, 204, 0, 0.05), transparent 40%);
+    z-index: -1;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 24px;
+    gap: 24px;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 16px 24px;
+    backdrop-filter: blur(10px);
+}
+
+.header-left h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.header-left .accent {
+    color: var(--text-muted);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #555;
+}
+
+.dot.connected {
+    background-color: var(--color-voltage);
+    box-shadow: 0 0 10px var(--color-voltage);
+}
+
+/* Button */
+.btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.btn.primary {
+    background: #202028;
+}
+
+/* Dashboard Grid */
+.dashboard {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+}
+
+.panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 24px;
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Flat design */
+.voltage-panel {
+    border-color: rgba(0, 255, 85, 0.3);
+}
+
+.current-panel {
+    border-color: rgba(255, 204, 0, 0.3);
+}
+
+.power-panel {
+    border-color: rgba(160, 160, 176, 0.3);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.panel-header h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+/* Typography for Values */
+.panel-value {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.big-text {
+    font-size: 5.5rem;
+    line-height: 1;
+}
+
+.unit {
+    font-size: 2.5rem;
+    margin-left: 8px;
+    opacity: 0.8;
+}
+
+.voltage-panel .panel-value {
+    color: var(--color-voltage);
+}
+
+.current-panel .panel-value {
+    color: var(--color-current);
+}
+
+.power-panel .panel-value {
+    color: var(--color-power);
+}
+
+.voltage-panel .stat span {
+    color: var(--color-voltage);
+}
+
+.current-panel .stat span {
+    color: var(--color-current);
+}
+
+/* Graph Section */
+.graph-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    /* Prevents flex children from overflowing the parent */
+}
+
+.graph-controls {
+    display: flex;
+    gap: 20px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.control-group label {
+    color: var(--text-muted);
+}
+
+.control-group select {
+    background: #202028;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    outline: none;
+}
+
+.graph-container {
+    flex: 1;
+    /* Takes remaining height */
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* uPlot Overrides */
+.uplot {
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.u-legend {
+    color: var(--text-muted);
+}
+
+.u-axis-text {
+    fill: var(--text-muted) !important;
+}
+
+.u-label {
+    fill: var(--text-muted) !important;
+}
+
+/* Custom Tooltip */
+.u-tooltip {
+    position: absolute;
+    display: none;
+    background: rgba(16, 20, 24, 0.9);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: var(--text-main);
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    transition: opacity 0.1s ease-out;
+}
+
+.u-tooltip.visible {
+    display: block;
+}
+
+.u-tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.u-tooltip-val-v {
+    color: #00ff55;
+    font-weight: bold;
+}
+
+.u-tooltip-val-i {
+    color: #ffcc00;
+    font-weight: bold;
+}
+
+.u-tooltip-time {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 4px;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}

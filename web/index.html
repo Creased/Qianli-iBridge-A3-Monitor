@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qianli iBridge Web Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="lib/uplot/uPlot.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <div class="header-left">
+                <h1>Qianli iBridge <span class="accent">Monitor</span></h1>
+                <div class="status-indicator">
+                    <span id="status-dot" class="dot disconnected"></span>
+                    <span id="status-text">Disconnected</span>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button id="demo-btn" class="btn btn-secondary">Load Demo</button>
+                <button id="csv-btn" class="btn btn-secondary" disabled>Download CSV (0)</button>
+                <button id="connect-btn" class="btn btn-primary">Connect Device</button>
+            </div>
+        </header>
+
+        <main class="dashboard">
+            <div class="panel voltage-panel">
+                <div class="panel-header">
+                    <h2>Voltage</h2>
+                    <div class="stats">
+                        <span class="stat">Max: <span id="v-max">0.000</span></span>
+                        <span class="stat">Min: <span id="v-min">0.000</span></span>
+                    </div>
+                </div>
+                <div class="panel-value">
+                    <span id="val-v" class="big-text">0.000</span>
+                    <span class="unit">V</span>
+                </div>
+            </div>
+
+            <div class="panel current-panel">
+                <div class="panel-header">
+                    <h2>Current</h2>
+                    <div class="stats">
+                        <span class="stat">Max: <span id="i-max">0.000</span></span>
+                        <span class="stat">Min: <span id="i-min">0.000</span></span>
+                    </div>
+                </div>
+                <div class="panel-value">
+                    <span id="val-i" class="big-text">0.000</span>
+                    <span class="unit">A</span>
+                </div>
+            </div>
+
+            <div class="panel power-panel">
+                <div class="panel-header">
+                    <h2>Power</h2>
+                </div>
+                <div class="panel-value">
+                    <span id="val-p" class="big-text">0.000</span>
+                    <span class="unit">W</span>
+                </div>
+            </div>
+        </main>
+        <section class="graph-section">
+            <div class="graph-container" id="uplot-chart">
+            </div>
+        </section>
+    </div>
+
+    <script src="lib/uplot/uPlot.iife.min.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
