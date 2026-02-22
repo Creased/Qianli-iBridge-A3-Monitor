@@ -305,6 +305,8 @@ function markerClickPlugin() {
 const MARKER_COLOR = 'rgba(0, 255, 255, 0.9)';
 const MARKER_LINE_COLOR = 'rgba(0, 255, 255, 0.5)';
 const MARKER_LABEL_BG = 'rgba(0, 0, 0, 0.7)';
+const MARKER_AUTO_COLOR = 'rgba(255, 140, 0, 0.9)';
+const MARKER_AUTO_LINE_COLOR = 'rgba(255, 140, 0, 0.5)';
 
 // uPlot Drawing Hook for Markers
 function drawMarkersHook() {
@@ -319,8 +321,6 @@ function drawMarkersHook() {
                 ctx.rect(left, top, width, height);
                 ctx.clip();
 
-                ctx.fillStyle = MARKER_COLOR;
-                ctx.strokeStyle = MARKER_LINE_COLOR;
                 ctx.lineWidth = 1;
                 ctx.textAlign = "center";
                 ctx.textBaseline = "bottom";
@@ -328,12 +328,15 @@ function drawMarkersHook() {
 
                 for (let i = 0; i < markers.length; i++) {
                     let m = markers[i];
+                    let mColor = m.auto ? MARKER_AUTO_COLOR : MARKER_COLOR;
+                    let mLineColor = m.auto ? MARKER_AUTO_LINE_COLOR : MARKER_LINE_COLOR;
 
                     // Only draw if within current view
                     if (m.time >= u.scales.x.min && m.time <= u.scales.x.max) {
                         let cx = Math.round(u.valToPos(m.time, 'x', true));
 
                         // Draw vertical line
+                        ctx.strokeStyle = mLineColor;
                         ctx.beginPath();
                         ctx.moveTo(cx, top);
                         ctx.lineTo(cx, top + height);
@@ -344,8 +347,8 @@ function drawMarkersHook() {
                         ctx.fillStyle = MARKER_LABEL_BG;
                         ctx.fillRect(cx - textWidth / 2 - 2, top, textWidth + 4, 14);
 
-                        // Draw Text
-                        ctx.fillStyle = MARKER_COLOR;
+                        // Draw text
+                        ctx.fillStyle = mColor;
                         ctx.fillText(m.label, cx, top + 13);
                     }
                 }
@@ -1103,7 +1106,7 @@ function runSwitchAnnotation() {
         }
 
         if (nextState !== state && label && nextState !== lastMarkerState) {
-            newMarkers.push({ time: t, label });
+            newMarkers.push({ time: t, label, auto: true });
             lastMarkerState = nextState;
         }
 
@@ -1120,6 +1123,23 @@ function runSwitchAnnotation() {
         const duplicate = markers.some(m => Math.abs(m.time - nm.time) < 0.05);
         if (!duplicate) {
             markers.push(nm);
+
+            // Also write into the CSV row nearest to this timestamp
+            let dataIdx = -1;
+            let minDiff = Infinity;
+            for (let i = 0; i < data[0].length; i++) {
+                const diff = Math.abs(data[0][i] - nm.time);
+                if (diff < minDiff) { minDiff = diff; dataIdx = i; }
+            }
+            if (dataIdx >= 0 && dataIdx + 1 < csvData.length) {
+                const targetRow = csvData[dataIdx + 1];
+                const parts = targetRow.split(',');
+                if (parts.length === 4) {
+                    csvData[dataIdx + 1] = targetRow + `,${nm.label}`;
+                } else if (parts.length > 4) {
+                    csvData[dataIdx + 1] = targetRow + `|${nm.label}`;
+                }
+            }
         }
     }
 
