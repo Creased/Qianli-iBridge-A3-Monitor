@@ -25,6 +25,7 @@
             </div>
             <div class="header-controls">
                 <button id="demo-btn" class="btn btn-secondary">Load Demo</button>
+                <button id="annotate-btn" class="btn btn-secondary">Auto-Annotate</button>
                 <input type="file" id="csv-input" accept=".csv" style="display: none;">
                 <button id="load-csv-btn" class="btn btn-secondary">Load CSV</button>
                 <button id="csv-btn" class="btn btn-secondary" disabled>Download CSV (0)</button>
@@ -83,6 +84,21 @@
                 <button id="marker-editor-save" class="btn btn-primary btn-sm">Save</button>
                 <button id="marker-editor-cancel" class="btn btn-secondary btn-sm">Cancel</button>
                 <button id="marker-editor-delete" class="btn btn-danger btn-sm">Delete</button>
+            </div>
+        </div>
+        <!-- Drag and Drop Overlay -->
+        <div id="drag-overlay" class="drag-overlay hidden">
+            <div class="drag-content">
+                <div class="drag-icon">
+                    <svg viewBox="0 0 24 24" width="64" height="64" stroke="currentColor" stroke-width="2" fill="none"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <polyline points="9 15 12 12 15 15"></polyline>
+                    </svg>
+                </div>
+                <h2>Drop CSV file anywhere</h2>
             </div>
         </div>
     </div>

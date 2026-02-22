@@ -51,6 +51,10 @@
     padding: 0;
 }
 
+html {
+    overflow-x: hidden; /* Prevent tooltip and absolute elements from causing horizontal scroll */
+}
+
 body {
     background-color: var(--bg-dark);
     color: var(--text-main);
@@ -181,6 +185,8 @@ header {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    min-width: 0; /* Prevent grid blowout */
+    overflow: hidden;
 }
 
 .voltage-panel {
@@ -228,12 +234,12 @@ header {
 }
 
 .big-text {
-    font-size: 5.5rem;
+    font-size: clamp(1.8rem, 4.2vw, 5.5rem);
     line-height: 1;
 }
 
 .unit {
-    font-size: 2.5rem;
+    font-size: clamp(0.9rem, 1.8vw, 2.5rem);
     margin-left: 8px;
     opacity: 0.8;
 }
@@ -382,6 +388,7 @@ header {
     box-shadow: 0 4px 12px var(--shadow-md);
     backdrop-filter: blur(4px);
     transition: opacity 0.1s ease-out;
+    max-width: calc(100vw - 24px); /* Never wider than the viewport */
 }
 
 .u-tooltip.visible {
@@ -416,4 +423,243 @@ canvas {
     width: 100%;
     height: 100%;
     display: block;
+}
+
+/* Auto-Annotate button — hidden until Konami code is entered */
+#annotate-btn {
+    display: none;
+}
+
+#annotate-btn.konami-unlocked {
+    display: inline-flex;
+    animation: konami-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes konami-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.6);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Drag and Drop Overlay */
+.drag-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(10, 10, 12, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.3s ease;
+}
+
+.drag-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.drag-content {
+    border: 3px dashed var(--color-voltage);
+    border-radius: 20px;
+    padding: 60px 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    background: rgba(0, 255, 85, 0.05);
+    box-shadow: 0 0 40px var(--color-voltage-glow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    pointer-events: none;
+}
+
+.drag-overlay.drag-active .drag-content {
+    transform: scale(1.05);
+    box-shadow: 0 0 80px var(--color-voltage-glow);
+    background: rgba(0, 255, 85, 0.1);
+}
+
+.drag-icon {
+    color: var(--color-voltage);
+    animation: bounce 2s infinite ease-in-out;
+}
+
+.drag-content h2 {
+    font-size: 2rem;
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* Responsive Layout */
+
+/* Tablet / narrow desktop (≤ 1000px) */
+@media (max-width: 1000px) {
+    .app-container {
+        padding: 16px;
+        gap: 16px;
+    }
+
+    header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 14px 18px;
+    }
+
+    .header-controls {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .dashboard {
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .power-panel {
+        grid-column: 1 / -1;
+    }
+
+    .panel {
+        padding: 18px;
+    }
+
+    .big-text {
+        font-size: 4rem;
+    }
+
+    .unit {
+        font-size: 2rem;
+    }
+}
+
+/* Mobile landscape / small tablet (≤ 640px) */
+@media (max-width: 640px) {
+    .app-container {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    header {
+        padding: 12px 14px;
+    }
+
+    .header-left h1 {
+        font-size: 1.2rem;
+    }
+
+    .header-controls {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    #connect-btn {
+        grid-column: 1 / -1;
+    }
+
+    .header-controls .btn {
+        padding: 10px 8px;
+        font-size: 0.82rem;
+        text-align: center;
+        justify-content: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .dashboard {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .power-panel {
+        grid-column: auto;
+    }
+
+    .panel {
+        padding: 14px 16px;
+    }
+
+    .panel-header {
+        margin-bottom: 12px;
+    }
+
+    .big-text {
+        font-size: 3.5rem;
+    }
+
+    .unit {
+        font-size: 1.6rem;
+    }
+
+    .graph-section {
+        min-height: 240px;
+    }
+}
+
+/* Mobile portrait (≤ 480px) */
+@media (max-width: 480px) {
+    body {
+        overflow-y: auto;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .app-container {
+        height: auto;
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .big-text {
+        font-size: 2.8rem;
+    }
+
+    .unit {
+        font-size: 1.4rem;
+    }
+
+    .panel {
+        padding: 12px 14px;
+    }
+
+    .panel-header h2 {
+        font-size: 1rem;
+    }
+
+    .stats {
+        font-size: 0.8rem;
+    }
+
+    .graph-section {
+        min-height: 200px;
+    }
+
+    .drag-content {
+        padding: 40px 30px;
+    }
+
+    .drag-content h2 {
+        font-size: 1.4rem;
+        text-align: center;
+    }
 }

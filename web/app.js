@@ -10,6 +10,29 @@ const markerEditorSave = document.getElementById('marker-editor-save');
 const markerEditorCancel = document.getElementById('marker-editor-cancel');
 const markerEditorDelete = document.getElementById('marker-editor-delete');
 
+// Konami Code (↑↑↓↓←→←→BA) — toggles the Auto-Annotate button, persisted via localStorage
+const KONAMI_SEQUENCE = [
+    'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown',
+    'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight',
+    'b', 'a',
+];
+let konamiPos = 0;
+
+// Restore state from previous session
+const annotateBtn = document.getElementById('annotate-btn');
+if (localStorage.getItem('annotate-unlocked') === '1') {
+    annotateBtn.classList.add('konami-unlocked');
+}
+
+document.addEventListener('keydown', (e) => {
+    konamiPos = (e.key === KONAMI_SEQUENCE[konamiPos]) ? konamiPos + 1 : (e.key === KONAMI_SEQUENCE[0] ? 1 : 0);
+    if (konamiPos === KONAMI_SEQUENCE.length) {
+        konamiPos = 0;
+        const unlocked = annotateBtn.classList.toggle('konami-unlocked');
+        localStorage.setItem('annotate-unlocked', unlocked ? '1' : '0');
+    }
+});
+
 // Web Serial Variables
 let port = null;
 let reader = null;
@@ -247,10 +270,15 @@ function markerClickPlugin() {
                         }
                     }
 
-                    // Position the editor popup near the click
-                    markerEditor.style.left = (e.clientX + 10) + 'px';
-                    markerEditor.style.top = (e.clientY + 10) + 'px';
+                    // Position the editor popup near the click, clamped to stay inside the viewport
                     markerEditor.classList.remove('hidden');
+                    const edW = markerEditor.offsetWidth;
+                    const edH = markerEditor.offsetHeight;
+                    const margin = 8;
+                    const rawLeft = e.clientX + 10;
+                    const rawTop = e.clientY + 10;
+                    markerEditor.style.left = Math.min(rawLeft, window.innerWidth - edW - margin) + 'px';
+                    markerEditor.style.top = Math.min(rawTop, window.innerHeight - edH - margin) + 'px';
 
                     if (foundMarker) {
                         // Edit existing
@@ -579,109 +607,150 @@ demoBtn.addEventListener('click', () => {
 });
 
 // CSV Load Functionality
+function processCsvText(text) {
+    const lines = text.split('\n');
+
+    if (lines.length < 2) return; // Needs header + at least 1 data row
+
+    // Reset state
+    data = [[], [], []];
+    markers = [];
+    csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
+    vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
+
+    // Skip header line (index 0)
+    for (let i = 1; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (!line) continue;
+
+        let parts = [];
+        let currentLine = line;
+
+        // Extract the first 4 columns (t, v, curr, power)
+        for (let c = 0; c < 4; c++) {
+            let commaIdx = currentLine.indexOf(',');
+            if (commaIdx !== -1) {
+                parts.push(currentLine.substring(0, commaIdx));
+                currentLine = currentLine.substring(commaIdx + 1);
+            } else {
+                parts.push(currentLine);
+                currentLine = "";
+                break;
+            }
+        }
+
+        // Anything left is the marker text
+        if (currentLine.length > 0) {
+            parts.push(currentLine);
+        }
+
+        if (parts.length >= 4) {
+            let t = parseFloat(parts[0]);
+            let v = parseFloat(parts[1]);
+            let curr = parseFloat(parts[2]);
+
+            if (isNaN(t) || isNaN(v) || isNaN(curr)) continue;
+
+            data[0].push(t);
+            data[1].push(v);
+            data[2].push(curr);
+            csvData.push(line); // Preserve exact line for exporting again
+
+            // Parse markers if present
+            if (parts.length >= 5 && parts[4]) {
+                let markerText = parts[4].replace(/^\|/, ''); // Support pipe fallback if used
+                if (markerText) {
+                    markers.push({ time: t, label: markerText });
+                }
+            }
+
+            // Update stats
+            if (v > vMax) vMax = v;
+            if (v < vMin) vMin = v;
+            if (curr > iMax) iMax = curr;
+            if (curr < iMin) iMin = curr;
+        }
+    }
+
+    // Update UI
+    document.getElementById('v-max').innerText = vMax.toFixed(3);
+    document.getElementById('v-min').innerText = vMin.toFixed(3);
+    document.getElementById('i-max').innerText = iMax.toFixed(3);
+    document.getElementById('i-min').innerText = iMin.toFixed(3);
+
+    if (data[0].length > 0) {
+        let lastV = data[1][data[1].length - 1];
+        let lastI = data[2][data[2].length - 1];
+        document.getElementById('val-v').innerText = lastV.toFixed(3);
+        document.getElementById('val-i').innerText = lastI.toFixed(3);
+        document.getElementById('val-p').innerText = (lastV * lastI).toFixed(3);
+
+        if (uplotChart) {
+            uplotChart.setScale('x', { min: data[0][0], max: data[0][data[0].length - 1] });
+            isAutoScrolling = false;
+            uplotChart.setData(data, false);
+        }
+    }
+
+    // Enable CSV button just in case
+    csvBtn.disabled = false;
+    csvBtn.innerText = `Download CSV (${csvData.length - 1})`;
+
+    // Reset input so the same file can be reloaded if needed
+    csvInput.value = '';
+}
+
+function handleCsvFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        processCsvText(event.target.result);
+    };
+    reader.readAsText(file);
+}
+
 loadCsvBtn.addEventListener('click', () => {
     csvInput.click();
 });
 
 csvInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    handleCsvFile(e.target.files[0]);
+});
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        const text = event.target.result;
-        const lines = text.split('\n');
+// Drag and Drop Overlay Logic
+const dragOverlay = document.getElementById('drag-overlay');
 
-        if (lines.length < 2) return; // Needs header + at least 1 data row
+document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+        dragOverlay.classList.remove('hidden');
+        dragOverlay.classList.add('drag-active');
+    }
+});
 
-        // Reset state
-        data = [[], [], []];
-        markers = [];
-        csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
-        vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
+document.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // If the drag leaves the window (clientX/Y = 0)
+    if (e.clientX === 0 && e.clientY === 0) {
+        dragOverlay.classList.remove('drag-active');
+        dragOverlay.classList.add('hidden');
+    }
+});
 
-        // Skip header line (index 0)
-        for (let i = 1; i < lines.length; i++) {
-            let line = lines[i].trim();
-            if (!line) continue;
+document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragOverlay.classList.remove('drag-active');
+    dragOverlay.classList.add('hidden');
 
-            let parts = [];
-            let currentLine = line;
-
-            // Extract the first 4 columns (t, v, curr, power)
-            for (let c = 0; c < 4; c++) {
-                let commaIdx = currentLine.indexOf(',');
-                if (commaIdx !== -1) {
-                    parts.push(currentLine.substring(0, commaIdx));
-                    currentLine = currentLine.substring(commaIdx + 1);
-                } else {
-                    parts.push(currentLine);
-                    currentLine = "";
-                    break;
-                }
-            }
-
-            // Anything left is the marker text
-            if (currentLine.length > 0) {
-                parts.push(currentLine);
-            }
-
-            if (parts.length >= 4) {
-                let t = parseFloat(parts[0]);
-                let v = parseFloat(parts[1]);
-                let curr = parseFloat(parts[2]);
-
-                if (isNaN(t) || isNaN(v) || isNaN(curr)) continue;
-
-                data[0].push(t);
-                data[1].push(v);
-                data[2].push(curr);
-                csvData.push(line); // Preserve exact line for exporting again
-
-                // Parse markers if present
-                if (parts.length >= 5 && parts[4]) {
-                    let markerText = parts[4].replace(/^\|/, ''); // Support pipe fallback if used
-                    if (markerText) {
-                        markers.push({ time: t, label: markerText });
-                    }
-                }
-
-                // Update stats
-                if (v > vMax) vMax = v;
-                if (v < vMin) vMin = v;
-                if (curr > iMax) iMax = curr;
-                if (curr < iMin) iMin = curr;
-            }
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv' || file.type === 'application/vnd.ms-excel') {
+            handleCsvFile(file);
         }
-
-        // Update UI
-        document.getElementById('v-max').innerText = vMax.toFixed(3);
-        document.getElementById('v-min').innerText = vMin.toFixed(3);
-        document.getElementById('i-max').innerText = iMax.toFixed(3);
-        document.getElementById('i-min').innerText = iMin.toFixed(3);
-
-        if (data[0].length > 0) {
-            let lastV = data[1][data[1].length - 1];
-            let lastI = data[2][data[2].length - 1];
-            document.getElementById('val-v').innerText = lastV.toFixed(3);
-            document.getElementById('val-i').innerText = lastI.toFixed(3);
-            document.getElementById('val-p').innerText = (lastV * lastI).toFixed(3);
-
-            if (uplotChart) {
-                uplotChart.setScale('x', { min: data[0][0], max: data[0][data[0].length - 1] });
-                isAutoScrolling = false;
-                uplotChart.setData(data, false);
-            }
-        }
-
-        // Enable CSV button just in case
-        csvBtn.disabled = false;
-        csvBtn.innerText = `Download CSV (${csvData.length - 1})`;
-
-        // Reset input so the same file can be reloaded if needed
-        csvInput.value = '';
-    };
-    reader.readAsText(file);
+    }
 });
 
 connectBtn.addEventListener('click', async () => {
@@ -888,3 +957,176 @@ csvBtn.addEventListener('click', () => {
     link.click();
     document.body.removeChild(link);
 });
+
+// ─── Nintendo Switch Auto-Annotate ───────────────────────────────────────────
+//
+// Ports the state machine from work/trace_annotator.py into JavaScript.
+// Thresholds derived from switch_boot.md and usb_c_cold_start_analysis.md.
+
+function runSwitchAnnotation() {
+    if (data[0].length < 2) {
+        alert('No trace data loaded. Load a CSV or connect a device first.');
+        return;
+    }
+
+    const THRESHOLDS = {
+        IDLE_CURRENT: 0.05,   // Below this → not yet active
+        WAKE_VOLTAGE: 14.5,   // 15V PD profile
+        EARLY_BOOT_I_MIN: 0.10,   // Current floor for early boot activity
+        STAGE1_BATT_I_MIN: 0.35,   // Sustained current in Stage 1 battery logo mode (>350mA)
+        STAGE1_BATT_SECS_MIN: 10.0,   // Must be active for ≥10s to be classified as battery charging
+        PD_RESET_V_MAX: 5.0,    // Voltage collapses during PD controller reset
+        PD_RESET_I_MAX: 0.05,   // Near-zero current during reset
+        SLEEP_I_MAX: 0.03,   // Deep sleep maintenance current (<30mA)
+        DROP_DELTA_I: 0.15,   // Significant drop from peak OS draw → screen off
+    };
+
+    const STATES = {
+        UNKNOWN: 'UNKNOWN',
+        OFF: 'OFF',
+        EARLY_BOOT: 'EARLY_BOOT',
+        PD_RESET: 'PD_RESET',
+        STAGE1_BATTERY: 'STAGE1_BATTERY',
+        MAIN_OS_BOOT: 'MAIN_OS_BOOT',
+        SCREEN_OFF: 'SCREEN_OFF',
+        BACKGROUND_ACTIVITY: 'BACKGROUND_ACTIVITY',
+        CHARGING_SLEEP: 'CHARGING_SLEEP',
+        SLEEP: 'SLEEP',
+    };
+
+    let state = STATES.UNKNOWN;
+    const newMarkers = [];
+    let peakOsCurrent = 0;
+    let screenOffCurrent = 0;
+    let hasBooted = false;
+    let earlyBootTime = null;
+    let lastMarkerState = null; // Only emit markers on state changes
+
+    for (let idx = 0; idx < data[0].length; idx++) {
+        const t = data[0][idx];
+        const v = data[1][idx];
+        const i = data[2][idx];
+
+        let nextState = state;
+        let label = null;
+
+        // ─ Global Override: Voltage collapse to <5V (PD Reset) can happen from any active state ─
+        if (state !== STATES.PD_RESET && state !== STATES.UNKNOWN && state !== STATES.OFF) {
+            if (v < THRESHOLDS.PD_RESET_V_MAX && i <= THRESHOLDS.EARLY_BOOT_I_MIN) {
+                nextState = STATES.PD_RESET;
+                label = 'PD Reset (Normal)';
+            }
+        }
+
+        if (nextState === state) {
+            switch (state) {
+                case STATES.UNKNOWN:
+                case STATES.OFF:
+                    if (v > THRESHOLDS.WAKE_VOLTAGE && i > THRESHOLDS.IDLE_CURRENT) {
+                        nextState = STATES.EARLY_BOOT;
+                        earlyBootTime = t;
+                        label = 'Early Boot / PD Active';
+                    } else {
+                        nextState = STATES.OFF;
+                    }
+                    break;
+
+                case STATES.EARLY_BOOT:
+                    // Normal path: PD Reset (now handled by global override)
+                    // Stage 1 battery path: sustained high current with no PD reset for >10s
+                    if (i >= THRESHOLDS.STAGE1_BATT_I_MIN && earlyBootTime !== null && (t - earlyBootTime) >= THRESHOLDS.STAGE1_BATT_SECS_MIN) {
+                        nextState = STATES.STAGE1_BATTERY;
+                        label = 'Stage 1 / Battery Charging';
+                    }
+                    break;
+
+                case STATES.STAGE1_BATTERY:
+                    // Stay here until voltage collapses (PD Reset global override), nothing to do per-tick
+                    break;
+
+                case STATES.PD_RESET:
+                    if (v > THRESHOLDS.WAKE_VOLTAGE && i > THRESHOLDS.EARLY_BOOT_I_MIN) {
+                        nextState = STATES.MAIN_OS_BOOT;
+                        label = hasBooted ? 'Horizon OS Boot (Secondary)' : 'Horizon OS Boot';
+                        hasBooted = true;
+                    }
+                    break;
+
+                case STATES.MAIN_OS_BOOT:
+                    if (i > peakOsCurrent) peakOsCurrent = i;
+                    if (v > THRESHOLDS.WAKE_VOLTAGE) {
+                        if (i < THRESHOLDS.SLEEP_I_MAX) {
+                            nextState = STATES.SLEEP;
+                            label = 'Deep Sleep';
+                        } else if (peakOsCurrent > 0.8 && i < peakOsCurrent - THRESHOLDS.DROP_DELTA_I) {
+                            nextState = STATES.SCREEN_OFF;
+                            screenOffCurrent = i;
+                            label = 'Screen Off / Idle Charge';
+                        }
+                    }
+                    break;
+
+                case STATES.SCREEN_OFF:
+                    if (v > THRESHOLDS.WAKE_VOLTAGE) {
+                        if (i < THRESHOLDS.SLEEP_I_MAX) {
+                            nextState = STATES.SLEEP;
+                            label = 'Deep Sleep';
+                        } else if (i > screenOffCurrent + 0.1) {
+                            nextState = STATES.BACKGROUND_ACTIVITY;
+                            label = 'Background Activity';
+                        }
+                    }
+                    break;
+
+                case STATES.BACKGROUND_ACTIVITY:
+                    if (v > THRESHOLDS.WAKE_VOLTAGE) {
+                        if (i < THRESHOLDS.SLEEP_I_MAX) {
+                            nextState = STATES.SLEEP;
+                            label = 'Deep Sleep';
+                        } else if (i < screenOffCurrent + 0.05) {
+                            nextState = STATES.CHARGING_SLEEP;
+                            label = 'Charging Sleep';
+                        }
+                    }
+                    break;
+
+                case STATES.CHARGING_SLEEP:
+                    if (v > THRESHOLDS.WAKE_VOLTAGE && i < THRESHOLDS.SLEEP_I_MAX) {
+                        nextState = STATES.SLEEP;
+                        label = 'Deep Sleep';
+                    }
+                    break;
+
+                case STATES.SLEEP:
+                    break;
+            }
+        }
+
+        if (nextState !== state && label && nextState !== lastMarkerState) {
+            newMarkers.push({ time: t, label });
+            lastMarkerState = nextState;
+        }
+
+        state = nextState;
+    }
+
+    if (newMarkers.length === 0) {
+        console.warn('Auto-Annotate: no Switch boot stages detected in this trace.');
+        return;
+    }
+
+    // Merge with existing markers (avoid duplicating same time)
+    for (const nm of newMarkers) {
+        const duplicate = markers.some(m => Math.abs(m.time - nm.time) < 0.05);
+        if (!duplicate) {
+            markers.push(nm);
+        }
+    }
+
+    if (uplotChart) uplotChart.redraw();
+
+    console.log(`Auto-Annotate: placed ${newMarkers.length} marker(s).`, newMarkers.map(m => `${m.time.toFixed(2)}s — ${m.label}`));
+}
+
+document.getElementById('annotate-btn').addEventListener('click', runSwitchAnnotation);
+

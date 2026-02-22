@@ -29,6 +29,7 @@ class QianliClient:
         self.voltage_v = 0.0
         self.current_a = 0.0
         self.last_update = 0
+        self.device_version = None
 
     def connect(self):
         """Establish serial connection to the device."""
@@ -67,6 +68,12 @@ class QianliClient:
         """Send Cmd 04 05 Payload 01 to disable binary data stream."""
         print("[Qianli] Disabling Data Stream...")
         pkt = self._build_packet(0x04, 0x05, payload=b'\x01')
+        self.ser.write(pkt)
+
+    def request_version(self):
+        """Send Cmd 01 04 to request the hardware/firmware version string."""
+        print("[Qianli] Requesting Device Version...")
+        pkt = self._build_packet(0x01, 0x04)
         self.ser.write(pkt)
 
     def get_latest_reading(self):
@@ -177,27 +184,67 @@ class QianliClient:
                 self.current_a = val1 / 10000.0
                 self.voltage_v = val2 / 1000.0
                 self.last_update = time.time()
-                
+            except Exception as e:
+                print(f"[Decode Error] {e}")
+
+        # Decode Version String (Model 01 Struct)
+        elif model == 0x01:
+            try:
+                if len(payload) >= 92: # 64 bytes for text, 4 unknown, 24 for hex UID
+                    self.device_version = {
+                        "Brand": payload[0:24].decode('ascii', errors='ignore').strip('\x00'),
+                        "Model": payload[24:48].decode('ascii', errors='ignore').strip('\x00'),
+                        "HW": payload[48:56].decode('ascii', errors='ignore').strip('\x00'),
+                        "FW": payload[56:64].decode('ascii', errors='ignore').strip('\x00'),
+                        "UID": payload[68:92].decode('ascii', errors='ignore').strip('\x00')
+                    }
+                elif len(payload) >= 64:
+                    self.device_version = {
+                        "Brand": payload[0:24].decode('ascii', errors='ignore').strip('\x00'),
+                        "Model": payload[24:48].decode('ascii', errors='ignore').strip('\x00'),
+                        "HW": payload[48:56].decode('ascii', errors='ignore').strip('\x00'),
+                        "FW": payload[56:64].decode('ascii', errors='ignore').strip('\x00')
+                    }
             except Exception as e:
                 print(f"[Decode Error] {e}")
 
 if __name__ == "__main__":
-    # Example Usage
+    import argparse
     import sys
-    port = "COM5" 
-    if len(sys.argv) > 1:
-        port = sys.argv[1]
-        
-    client = QianliClient(port)
+    
+    parser = argparse.ArgumentParser(description="Qianli iBridge A3 Python Client")
+    parser.add_argument("port", nargs="?", default="COM5", help="Serial port (e.g., COM5, /dev/ttyUSB0)")
+    parser.add_argument("command", nargs="?", default="monitor", choices=["monitor", "version"],
+                        help="Action to perform: 'monitor' (default) for stream, 'version' for device info")
+    
+    args = parser.parse_args()
+    
+    client = QianliClient(args.port)
     if client.connect():
-        client.enable_stream()
-        print("Monitoring... Press Ctrl+C to stop")
-        try:
-            while True:
-                v, i, t = client.get_latest_reading()
-                print(f"\rVoltage: {v:.3f} V  |  Current: {i:.3f} A   ", end="")
+        if args.command == "version":
+            client.request_version()
+            print("Waiting for version...")
+            # Wait up to 2 seconds for response
+            for _ in range(20):
+                if client.device_version:
+                    print(f"\nDevice Info:")
+                    for k, v in client.device_version.items():
+                        print(f"  {k}: {v}")
+                    break
                 time.sleep(0.1)
-        except KeyboardInterrupt:
-            print("\nStopping...")
-            client.disable_stream()
+            else:
+                print("\nNo version response received.")
             client.disconnect()
+            
+        elif args.command == "monitor":
+            client.enable_stream()
+            print("Monitoring... Press Ctrl+C to stop")
+            try:
+                while True:
+                    v, i, t = client.get_latest_reading()
+                    print(f"\rVoltage: {v:.3f} V  |  Current: {i:.3f} A   ", end="")
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                print("\nStopping...")
+                client.disable_stream()
+                client.disconnect()
