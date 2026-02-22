@@ -1,7 +1,10 @@
 // UI Elements
 const connectBtn = document.getElementById('connect-btn');
+const pauseBtn = document.getElementById('pause-btn');
+const clearBtn = document.getElementById('clear-btn');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
+const recordingDuration = document.getElementById('recording-duration');
 
 // Marker Editor Elements
 const markerEditor = document.getElementById('marker-editor');
@@ -37,10 +40,13 @@ document.addEventListener('keydown', (e) => {
 let port = null;
 let reader = null;
 let keepReading = false;
+let isPaused = false;
+let firstPacketReceived = false;
 
 // Statistics & History
-let vMax = 0, vMin = 99.0;
-let iMax = 0, iMin = 99.0;
+let vMax = 0, vMin = 99.0, vSum = 0;
+let iMax = 0, iMin = 99.0, iSum = 0;
+let sampleCount = 0;
 
 // CSV Logging
 const csvBtn = document.getElementById('csv-btn');
@@ -546,6 +552,7 @@ demoBtn.addEventListener('click', () => {
     // Generate 30 seconds of realistic USB trace at 100Hz
     let t = 0;
     vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
+    vSum = 0; iSum = 0; sampleCount = 0;
     data = [[], [], []];
     markers = [];
 
@@ -579,18 +586,21 @@ demoBtn.addEventListener('click', () => {
         data[1].push(v);
         data[2].push(curr);
 
-        // Update stats
+        // Update stats including avg accumulators
         if (v > vMax) vMax = v;
         if (v < vMin) vMin = v;
         if (curr > iMax) iMax = curr;
         if (curr < iMin) iMin = curr;
+        vSum += v; iSum += curr; sampleCount++;
     }
 
     // Set UI limits
     document.getElementById('v-max').innerText = vMax.toFixed(3);
     document.getElementById('v-min').innerText = vMin.toFixed(3);
+    document.getElementById('v-avg').innerText = (vSum / sampleCount).toFixed(3);
     document.getElementById('i-max').innerText = iMax.toFixed(3);
     document.getElementById('i-min').innerText = iMin.toFixed(3);
+    document.getElementById('i-avg').innerText = (iSum / sampleCount).toFixed(3);
 
     // Set last values to labels
     let lastV = data[1][data[1].length - 1];
@@ -601,12 +611,15 @@ demoBtn.addEventListener('click', () => {
 
     startTimeMs = Date.now() - (t * 1000); // Fake start time for continuity if desired
 
+    clearBtn.disabled = false;
+
     if (uplotChart) {
-        // Reset X scale to show full trace
-        uplotChart.setScale('x', { min: 0, max: 30 });
-        isAutoScrolling = false; // Disable auto scroll so user can view it safely
-        uplotChart.setData(data, false);
+        isAutoScrolling = false;
+        uplotChart.setData(data);   // auto-range first
+        uplotChart.setScale('x', { min: 0, max: 30 }); // then pin to full view
     }
+
+
 });
 
 // CSV Load Functionality
@@ -620,6 +633,7 @@ function processCsvText(text) {
     markers = [];
     csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
     vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
+    vSum = 0; iSum = 0; sampleCount = 0;
 
     // Skip header line (index 0)
     for (let i = 1; i < lines.length; i++) {
@@ -672,14 +686,17 @@ function processCsvText(text) {
             if (v < vMin) vMin = v;
             if (curr > iMax) iMax = curr;
             if (curr < iMin) iMin = curr;
+            vSum += v; iSum += curr; sampleCount++;
         }
     }
 
     // Update UI
     document.getElementById('v-max').innerText = vMax.toFixed(3);
     document.getElementById('v-min').innerText = vMin.toFixed(3);
+    document.getElementById('v-avg').innerText = sampleCount > 0 ? (vSum / sampleCount).toFixed(3) : '0.000';
     document.getElementById('i-max').innerText = iMax.toFixed(3);
     document.getElementById('i-min').innerText = iMin.toFixed(3);
+    document.getElementById('i-avg').innerText = sampleCount > 0 ? (iSum / sampleCount).toFixed(3) : '0.000';
 
     if (data[0].length > 0) {
         let lastV = data[1][data[1].length - 1];
@@ -695,9 +712,10 @@ function processCsvText(text) {
         }
     }
 
-    // Enable CSV button just in case
+    // Enable CSV and Clear buttons
     csvBtn.disabled = false;
     csvBtn.innerText = `Download CSV (${csvData.length - 1})`;
+    clearBtn.disabled = false;
 
     // Reset input so the same file can be reloaded if needed
     csvInput.value = '';
@@ -756,12 +774,73 @@ document.addEventListener('drop', (e) => {
     }
 });
 
+// Recording duration ticker
+let _durationInterval = null;
+function startDurationTicker() {
+    _durationInterval = setInterval(() => {
+        const sec = Math.floor((Date.now() - startTimeMs) / 1000);
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        recordingDuration.textContent = `● ${m}m ${s.toString().padStart(2, '0')}s`;
+    }, 1000);
+}
+function stopDurationTicker() {
+    clearInterval(_durationInterval);
+    recordingDuration.textContent = '';
+}
+
+// Send a packet to the device
+async function sendPacket(model, cmd, payload) {
+    if (!port || !port.writable) return;
+    const cs = payload.reduce((a, b) => a ^ b, 0);
+    const pkt = new Uint8Array([0xDA, payload.length, 0x00, model, cmd, 0x00, 0x00, cs, ...payload]);
+    const writer = port.writable.getWriter();
+    await writer.write(pkt);
+    writer.releaseLock();
+}
+
 connectBtn.addEventListener('click', async () => {
     if (port) {
         await disconnect();
     } else {
         await connect();
     }
+});
+
+let pauseStartMs = 0;
+
+pauseBtn.addEventListener('click', async () => {
+    if (!port) return;
+    if (isPaused) {
+        // Resume: shift the time origin forward by the pause duration
+        // so the chart and CSV continue seamlessly with no gap
+        startTimeMs += Date.now() - pauseStartMs;
+        await sendPacket(0x04, 0x05, [0x00]);   // stream enable
+        isPaused = false;
+        pauseBtn.textContent = 'Pause';
+        startDurationTicker();
+    } else {
+        await sendPacket(0x04, 0x05, [0x01]);   // stream disable
+        isPaused = true;
+        pauseStartMs = Date.now();
+        pauseBtn.textContent = 'Resume';
+        stopDurationTicker();
+    }
+});
+
+
+clearBtn.addEventListener('click', () => {
+    vMax = 0; vMin = 99.0; vSum = 0;
+    iMax = 0; iMin = 99.0; iSum = 0;
+    sampleCount = 0;
+    data = [[], [], []];
+    markers = [];
+    csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
+    startTimeMs = Date.now();
+    ['v-max', 'v-min', 'v-avg', 'i-max', 'i-min', 'i-avg'].forEach(id =>
+        document.getElementById(id).innerText = '0.000');
+    csvBtn.textContent = 'Download CSV (0)';
+    if (uplotChart) uplotChart.setData(data);
 });
 
 async function connect() {
@@ -772,56 +851,84 @@ async function connect() {
 
         // Update UI
         connectBtn.textContent = 'Disconnect';
+        pauseBtn.disabled = false;
+        clearBtn.disabled = false;
         statusDot.classList.add('connected');
+        statusDot.classList.remove('dot-error');
         statusText.textContent = 'Connected';
+        statusText.classList.remove('status-error');
 
         // Reset stats
-        vMax = 0; vMin = 99.0; iMax = 0; iMin = 99.0;
+        vMax = 0; vMin = 99.0; vSum = 0;
+        iMax = 0; iMin = 99.0; iSum = 0;
+        sampleCount = 0;
         data = [[], [], []];
         markers = [];
         if (uplotChart) uplotChart.setData(data);
         csvData = ["Time(s),Voltage(V),Current(A),Power(W),Marker"];
         startTimeMs = Date.now();
         csvBtn.disabled = false;
-        csvBtn.textContent = `Download CSV (0)`;
-
+        csvBtn.textContent = 'Download CSV (0)';
         isAutoScrolling = true;
+        isPaused = false;
+        firstPacketReceived = false;
+        pauseBtn.textContent = 'Pause';
+
+        startDurationTicker();
 
         keepReading = true;
         readLoop();
 
-        // Send Enable Command
-        // DA 01 00 04 05 00 00 00 00
-        const writer = port.writable.getWriter();
-        const enableCmd = new Uint8Array([0xDA, 0x01, 0x00, 0x04, 0x05, 0x00, 0x00, 0x00, 0x00]);
-        await writer.write(enableCmd);
-        writer.releaseLock();
+        // Handshake: ping (01 01) → version (01 04) → stream enable (04 05 00)
+        await sendPacket(0x01, 0x01, [0x00]);               // ping
+        await new Promise(r => setTimeout(r, 150));         // wait for ACK
+        await sendPacket(0x01, 0x04, [0x00]);               // version request
+        await new Promise(r => setTimeout(r, 300));         // wait for version response
+        await sendPacket(0x04, 0x05, [0x00]);               // enable stream
 
     } catch (e) {
-        console.error('Connection failed:', e);
+        if (e.name === 'NotFoundError') {
+            // User cancelled — do nothing
+        } else {
+            // Ensure port is fully cleaned up so Connect works again
+            if (port) { try { await port.close(); } catch (_) { } port = null; }
+            statusDot.classList.remove('connected');
+            statusDot.classList.add('dot-error');
+            statusText.classList.add('status-error');
+            if (e.name === 'NetworkError') {
+                statusText.textContent = 'Port in use by another app';
+                console.warn('Port busy:', e);
+            } else {
+                statusText.textContent = 'Connection error';
+                console.error('Connection failed:', e);
+            }
+        }
     }
+
 }
+
 
 async function disconnect() {
     keepReading = false;
+    isPaused = false;
+    stopDurationTicker();
 
-    // Send Disable Command before closing
-    if (port && port.writable) {
-        try {
-            const writer = port.writable.getWriter();
-            const disableCmd = new Uint8Array([0xDA, 0x01, 0x00, 0x04, 0x05, 0x00, 0x00, 0x01, 0x01]);
-            await writer.write(disableCmd);
-            writer.releaseLock();
-        } catch (e) { console.error('Failed to send disable cmd', e); }
-    }
+    await sendPacket(0x04, 0x05, [0x01]);   // stream disable
+    await new Promise(r => setTimeout(r, 80)); // wait for OS to flush the write buffer
 
     if (reader) {
         await reader.cancel();
     }
 
+
     connectBtn.textContent = 'Connect Device';
+    pauseBtn.disabled = true;
+    pauseBtn.textContent = 'Pause';
+    clearBtn.disabled = true;
     statusDot.classList.remove('connected');
+    statusDot.classList.remove('dot-error');
     statusText.textContent = 'Disconnected';
+    statusText.classList.remove('status-error');
 }
 
 async function readLoop() {
@@ -880,7 +987,17 @@ async function readLoop() {
                             let current_a = val1 / 10000.0;
                             let voltage_v = val2 / 1000.0;
 
-                            updateData(voltage_v, current_a);
+                            if (!isPaused) updateData(voltage_v, current_a);
+
+                        } else if (model === 0x01 && cmd === 0x04 && length >= 64) {
+                            // Version response — decode and show in status tooltip
+                            const dec = new TextDecoder();
+                            const brand = dec.decode(payload.slice(0, 24)).replace(/\0/g, '').trim();
+                            const mdl = dec.decode(payload.slice(24, 48)).replace(/\0/g, '').trim();
+                            const hw = dec.decode(payload.slice(48, 56)).replace(/\0/g, '').trim();
+                            const fw = dec.decode(payload.slice(56, 64)).replace(/\0/g, '').trim();
+                            statusText.title = `${brand} ${mdl}  HW:${hw}  FW:${fw}`;
+                            console.log(`[Device] ${brand} ${mdl}  HW:${hw}  FW:${fw}`);
                         }
                     } else {
                         // Reject, drop 1 byte to resync
@@ -902,12 +1019,28 @@ async function readLoop() {
 }
 
 function updateData(v, i) {
-    // Update Stats (Skip first reading if min is 99 to avoid glitch)
-    // Actually, min starts at 99.0 so any normal voltage updates it.
+    // Reset timeline on the very first sample so handshake delay is not counted
+    if (!firstPacketReceived) {
+        firstPacketReceived = true;
+        startTimeMs = Date.now();
+        stopDurationTicker();
+        startDurationTicker();
+    }
+
+    sampleCount++;
+    vSum += v;
+    iSum += i;
+
     if (v > vMax) { vMax = v; document.getElementById('v-max').innerText = v.toFixed(3); }
     if (v < vMin) { vMin = v; document.getElementById('v-min').innerText = v.toFixed(3); }
     if (i > iMax) { iMax = i; document.getElementById('i-max').innerText = i.toFixed(3); }
     if (i < iMin) { iMin = i; document.getElementById('i-min').innerText = i.toFixed(3); }
+
+    // Update averages every 10 samples to reduce DOM churn
+    if (sampleCount % 10 === 0) {
+        document.getElementById('v-avg').innerText = (vSum / sampleCount).toFixed(3);
+        document.getElementById('i-avg').innerText = (iSum / sampleCount).toFixed(3);
+    }
 
     // Update Digital Displays
     let p = v * i;

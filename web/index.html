@@ -21,6 +21,7 @@
                 <div class="status-indicator">
                     <span id="status-dot" class="dot disconnected"></span>
                     <span id="status-text">Disconnected</span>
+                    <span id="recording-duration" class="recording-duration"></span>
                 </div>
             </div>
             <div class="header-controls">
@@ -29,6 +30,8 @@
                 <input type="file" id="csv-input" accept=".csv" style="display: none;">
                 <button id="load-csv-btn" class="btn btn-secondary">Load CSV</button>
                 <button id="csv-btn" class="btn btn-secondary" disabled>Download CSV (0)</button>
+                <button id="clear-btn" class="btn btn-secondary" disabled>Clear</button>
+                <button id="pause-btn" class="btn btn-secondary" disabled>Pause</button>
                 <button id="connect-btn" class="btn btn-primary">Connect Device</button>
             </div>
         </header>
@@ -40,6 +43,7 @@
                     <div class="stats">
                         <span class="stat">Max: <span id="v-max">0.000</span></span>
                         <span class="stat">Min: <span id="v-min">0.000</span></span>
+                        <span class="stat">Avg: <span id="v-avg">0.000</span></span>
                     </div>
                 </div>
                 <div class="panel-value">
@@ -54,6 +58,7 @@
                     <div class="stats">
                         <span class="stat">Max: <span id="i-max">0.000</span></span>
                         <span class="stat">Min: <span id="i-min">0.000</span></span>
+                        <span class="stat">Avg: <span id="i-avg">0.000</span></span>
                     </div>
                 </div>
                 <div class="panel-value">

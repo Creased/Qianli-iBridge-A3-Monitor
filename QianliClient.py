@@ -58,6 +58,13 @@ class QianliClient:
             self.ser.close()
         print("[Qianli] Disconnected")
 
+    def ping(self):
+        """Send Cmd 01 01 ping and wait briefly for 4F59 ACK."""
+        print("[Qianli] Pinging device...")
+        pkt = self._build_packet(0x01, 0x01)
+        self.ser.write(pkt)
+        time.sleep(0.15)
+
     def enable_stream(self):
         """Send Cmd 04 05 Payload 00 to enable binary data stream."""
         print("[Qianli] Enabling Data Stream...")

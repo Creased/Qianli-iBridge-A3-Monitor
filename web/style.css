@@ -52,7 +52,8 @@
 }
 
 html {
-    overflow-x: hidden; /* Prevent tooltip and absolute elements from causing horizontal scroll */
+    overflow-x: hidden;
+    /* Prevent tooltip and absolute elements from causing horizontal scroll */
 }
 
 body {
@@ -185,7 +186,8 @@ header {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-width: 0; /* Prevent grid blowout */
+    min-width: 0;
+    /* Prevent grid blowout */
     overflow: hidden;
 }
 
@@ -388,7 +390,8 @@ header {
     box-shadow: 0 4px 12px var(--shadow-md);
     backdrop-filter: blur(4px);
     transition: opacity 0.1s ease-out;
-    max-width: calc(100vw - 24px); /* Never wider than the viewport */
+    max-width: calc(100vw - 24px);
+    /* Never wider than the viewport */
 }
 
 .u-tooltip.visible {
@@ -530,6 +533,7 @@ canvas {
         flex-wrap: wrap;
         gap: 8px;
     }
+
     .dashboard {
         grid-template-columns: 1fr 1fr;
         gap: 16px;
@@ -573,6 +577,7 @@ canvas {
         grid-template-columns: 1fr 1fr;
         gap: 8px;
     }
+
     #connect-btn {
         grid-column: 1 / -1;
     }
@@ -586,6 +591,7 @@ canvas {
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
     .dashboard {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -662,4 +668,37 @@ canvas {
         font-size: 1.4rem;
         text-align: center;
     }
+}
+
+/* Recording duration badge */
+.recording-duration {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    color: #ff5555;
+    opacity: 0.85;
+    letter-spacing: 0.05em;
+    margin-left: 8px;
+    animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+
+    0%,
+    100% {
+        opacity: 0.85;
+    }
+
+    50% {
+        opacity: 0.35;
+    }
+}
+
+/* Status error state */
+.status-error {
+    color: var(--color-danger) !important;
+    transition: color 0.2s ease;
+}
+
+.dot-error {
+    background-color: var(--color-danger) !important;
 }

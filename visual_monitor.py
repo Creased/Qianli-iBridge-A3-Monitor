@@ -32,7 +32,11 @@ class VisualMonitor:
         if not self.client.connect():
             print(f"Failed to connect to {port}")
             sys.exit(1)
+        self.client.ping()
+        self.client.request_version()
+        time.sleep(0.3)
         self.client.enable_stream()
+
         
         # Stats Initialization
         self.v_max = 0.0
